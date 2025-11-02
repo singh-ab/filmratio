@@ -1,0 +1,45 @@
+.lb-ar-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 6px;
+  border-radius: 12px;
+  background: rgba(60, 65, 80, 0.85);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.lb-ar-badge.lb-ar-loading {
+  background: linear-gradient(
+    90deg,
+    rgba(60, 65, 80, 0.3) 0%,
+    rgba(60, 65, 80, 0.85) 50%,
+    rgba(60, 65, 80, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: lb-ar-shimmer 1.2s infinite;
+}
+
+.lb-ar-badge.lb-ar-na {
+  background: rgba(100, 100, 100, 0.6);
+}
+
+.lb-ar-badge-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.lb-ar-badge-link:hover {
+  text-decoration: underline;
+}
+
+@keyframes lb-ar-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

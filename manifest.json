@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Letterboxd Aspect Ratio",
+  "version": "0.1.0",
+  "description": "Displays the film's aspect ratio on Letterboxd using IMDb Technical Specs.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.imdb.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://letterboxd.com/film/*/"],
+      "js": ["src/content.js"],
+      "css": ["styles/badge.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_title": "Letterboxd Aspect Ratio",
+    "default_popup": "popup.html"
+  }
+}
