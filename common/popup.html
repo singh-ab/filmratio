@@ -1,118 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="dark">
+  <!-- Added data-theme="dark" for automatic dark mode -->
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AR Lookup Status</title>
+    <!-- Link Pico first -->
+    <link rel="stylesheet" href="styles/pico.min.css" />
+    <!-- You can add a custom stylesheet after for overrides -->
     <style>
-      body {
+      /* Make the popup a bit wider and remove margins */
+      main {
         width: 320px;
-        padding: 16px;
-        font-family: system-ui, -apple-system, sans-serif;
-        font-size: 13px;
+        padding: 1rem;
         margin: 0;
-        background: #f5f5f5;
       }
-      h3 {
-        margin: 0 0 12px 0;
-        font-size: 16px;
-        color: #333;
-      }
-      .status-row {
-        background: white;
-        padding: 10px 12px;
-        margin-bottom: 8px;
-        border-radius: 6px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .label {
-        color: #666;
-        font-weight: 500;
-      }
-      .value {
-        color: #111;
-        font-weight: 600;
-        text-align: right;
-        max-width: 180px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .status-success {
-        color: #22c55e;
-      }
-      .status-error {
-        color: #ef4444;
-      }
-      .status-fetching {
-        color: #3b82f6;
-      }
-      .status-idle {
-        color: #64748b;
-      }
-      .footer {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid #e5e5e5;
-        font-size: 11px;
-        color: #999;
-        text-align: center;
-      }
-      code {
-        background: #f1f1f1;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-size: 11px;
+      small {
+        color: var(--pico-color-muted);
       }
     </style>
   </head>
   <body>
-    <h3>🎬 Aspect Ratio Lookup</h3>
+    <main>
+      <!-- Use <main> as the primary container -->
+      <hgroup>
+        <h4>AR Lookup Status</h4>
+        <p>Real-time aspect ratio data.</p>
+      </hgroup>
 
-    <div class="status-row">
-      <span class="label">Status</span>
-      <span class="value" id="status">Loading...</span>
-    </div>
+      <!-- Use an <article> for a styled card effect -->
+      <article>
+        <p><strong>Status:</strong> <span id="status">Idle</span></p>
+        <p><strong>Current Film:</strong><br>
+          <span id="last-film-title">N/A</span></p>
+        <p><strong>Aspect Ratio:</strong> <span id="last-ar">N/A</span></p>
+        <hr />
+        <details>
+          <summary>Statistics</summary>
+          <small>
+            Total Lookups: <span id="fetch-count">0</span><br>
+            Cache Hits: <span id="cache-count">0</span><br>
+            IMDb Requests: <span id="imdb-requests">0</span>
+          </small>
+        </details>
+      </article>
 
-    <div class="status-row">
-      <span class="label">Last Film</span>
-      <span class="value" id="imdbId">—</span>
-    </div>
-
-    <div class="status-row">
-      <span class="label">Aspect Ratio</span>
-      <span class="value" id="aspectRatio">—</span>
-    </div>
-
-    <div class="status-row">
-      <span class="label">Total Lookups</span>
-      <span class="value" id="totalFetches">0</span>
-    </div>
-
-    <div class="status-row">
-      <span class="label">Cache Hits</span>
-      <span class="value" id="cacheHits">0</span>
-    </div>
-
-    <div class="status-row">
-      <span class="label">IMDb Requests</span>
-      <span class="value" id="imdbRequests">0</span>
-    </div>
-
-    <div class="status-row" id="errorRow" style="display: none">
-      <span class="label">Error</span>
-      <span class="value" id="error" style="color: #ef4444">—</span>
-    </div>
-
-    <div class="footer">
-      Open a
-      <a href="https://letterboxd.com/film/memories-of-murder/" target="_blank"
-        >Letterboxd film page</a
-      >
-      to see it in action.
-    </div>
-
+      <p
+        id="error-message"
+        style="color: var(--pico-color-red); display: none"
+      ></p>
+    </main>
     <script src="popup.js"></script>
   </body>
 </html>
