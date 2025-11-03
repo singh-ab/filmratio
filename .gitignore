@@ -1,0 +1,23 @@
+# Build outputs
+dist/
+
+# Node modules (if ever added)
+node_modules/
+
+# Polyfill (auto-downloaded)
+common/src/lib/browser-polyfill.min.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
