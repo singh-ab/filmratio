@@ -11,7 +11,8 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MIN_REQUEST_INTERVAL_MS = 1000; // 1 second between IMDb requests
 
 // Track per-tab aspect ratios (persisted to session storage)
-const TAB_DATA = new Map(); // tabId -> { imdbId, aspectRatio, filmTitle }
+// aspectRatio is the primary (for icon), displayText is all ratios for page badge
+const TAB_DATA = new Map(); // tabId -> { imdbId, aspectRatio, displayText, filmTitle }
 
 // Rate limiting
 let lastImdbRequestTime = 0;
@@ -57,11 +58,19 @@ function saveTabData() {
 function updateBadgeForTab(tabId) {
   const data = TAB_DATA.get(tabId);
   if (data && data.aspectRatio) {
-    chrome.action.setBadgeText({ text: data.aspectRatio, tabId });
+    // Keep icon badge short (e.g., 2.39 instead of 2.39:1)
+    const shortText = formatBadgeTextForIcon(data.aspectRatio);
+    chrome.action.setBadgeText({ text: shortText, tabId });
     chrome.action.setBadgeBackgroundColor({ color: "#4CAF50", tabId });
-    chrome.action.setTitle({ 
-      title: `${data.filmTitle || "Film"}: ${data.aspectRatio}`, 
-      tabId 
+    chrome.action.setTitle({
+      title: `${data.filmTitle || "Film"}: ${data.aspectRatio}${
+        data.mappedTypeShort ? ` (${data.mappedTypeShort})` : ""
+      }${
+        data.displayText && data.displayText !== data.aspectRatio
+          ? `\nAll: ${data.displayText}`
+          : ""
+      }`,
+      tabId,
     });
   } else {
     chrome.action.setBadgeText({ text: "", tabId });
@@ -106,33 +115,262 @@ function normalizeAspectRatioText(text) {
   return v;
 }
 
-function parseAllAspectRatiosFromImdb(html) {
-  // Very tolerant parser that looks for the label 'Aspect ratio' and then captures the following text chunk.
-  // IMDb markup changes occasionally; this aims to survive by working on raw text.
-  const results = [];
-  if (!html) return results;
-  const stripped = html
+// Extract the nearest self-contained block (tr/li/div) that holds the "Aspect ratio" label
+function findAspectRatioBlocks(html) {
+  const blocks = [];
+  if (!html) return blocks;
+  const cleaned = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "");
-  const lower = stripped.toLowerCase();
-  let idx = 0;
-  while ((idx = lower.indexOf("aspect ratio", idx)) !== -1) {
-    const sliceHtml = stripped.slice(idx, idx + 800); // look ahead a bit
-    const text = sliceHtml
-      .replace(/<[^>]*>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    // Find label and take the next chunk
-    const m = text.match(
-      /aspect\s*ratio\s*([^|\n\r]+?)(?:\s{2,}|\s+(Camera|Runtime|Sound mix|Color|Negative|Cinematographic|Printed|Contribute)\b|$)/i
-    );
-    if (m && m[1]) {
-      const v = normalizeAspectRatioText(m[1]);
-      if (v) results.push(v);
-    }
-    idx += 12; // move past label to find more
+
+  // Common structures to support:
+  // - <tr>...<td>Aspect ratio</td><td>...</td></tr>
+  // - <li ...>...Aspect ratio...</li>
+  // - <div ... data-testid="title-techspecs-aspectratio" ...>...</div>
+
+  const patterns = [
+    /<tr[\s\S]*?>[\s\S]*?Aspect\s*ratio[\s\S]*?<\/tr>/gi,
+    /<li[\s\S]*?>[\s\S]*?Aspect\s*ratio[\s\S]*?<\/li>/gi,
+    /<div[^>]*?data-testid=["']title-techspecs-aspectratio["'][\s\S]*?<\/div>/gi,
+    /<section[\s\S]*?>[\s\S]*?Aspect\s*ratio[\s\S]*?<\/section>/gi,
+  ];
+  for (const re of patterns) {
+    const m = cleaned.match(re);
+    if (m && m.length) blocks.push(...m);
   }
-  return results;
+
+  // Fallback: find around the first occurrence and capture limited range until a closing tag boundary
+  if (blocks.length === 0) {
+    const lower = cleaned.toLowerCase();
+    const idx = lower.indexOf("aspect ratio");
+    if (idx !== -1) {
+      const slice = cleaned.slice(Math.max(0, idx - 200), idx + 800);
+      blocks.push(slice);
+    }
+  }
+  return blocks;
+}
+
+// Pull individual ratio tokens out of a block; support variants and notes
+function parseRatiosFromBlock(blockHtml) {
+  if (!blockHtml) return [];
+
+  // First, aggressively remove all HTML tags and attributes
+  let text = blockHtml
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<a\b[^>]*>/gi, " ")
+    .replace(/<\/a>/gi, " ")
+    .replace(/<li\b[^>]*>/gi, " ")
+    .replace(/<\/li>/gi, " ")
+    .replace(/<ul\b[^>]*>/gi, " ")
+    .replace(/<\/ul>/gi, " ")
+    .replace(/<div\b[^>]*>/gi, " ")
+    .replace(/<\/div>/gi, " ")
+    .replace(/<span\b[^>]*>/gi, " ")
+    .replace(/<\/span>/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // After the label, keep only the part STRICTLY before next known field label
+  const afterLabel = text.replace(/^[\s\S]*?aspect\s*ratio\s*/i, "");
+  const clipped = afterLabel
+    .replace(
+      /\b(Camera|Runtime|Sound mix|Color|Negative|Cinematographic|Printed|Laboratory|Film length|Contribute to this page)\b[\s\S]*$/i,
+      ""
+    )
+    .trim();
+
+  // Also clip if we see HTML artifacts like "class=" or "role=" which indicate unparsed markup
+  const cleaned = clipped
+    .replace(/\b(class|role|data-testid)\s*=[\s\S]*$/i, "")
+    .trim();
+
+  // Split by common separators, but also preserve parenthetical notes
+  // Pattern: split on periods NOT inside parens, or explicit separators
+  const parts = [];
+  let current = "";
+  let parenDepth = 0;
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (c === "(") parenDepth++;
+    else if (c === ")") parenDepth--;
+
+    // Split on certain chars only when not inside parens
+    if (parenDepth === 0 && /[•·|;]/.test(c)) {
+      if (current.trim()) parts.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += c;
+  }
+  if (current.trim()) parts.push(current.trim());
+
+  const out = [];
+  for (const p of parts) {
+    // Extract first ratio-like pattern (handles "2.39 : 1", "1.43:1", etc.)
+    const m = p.match(/(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)/);
+    if (m) {
+      const num = parseFloat(m[1]);
+      const den = parseFloat(m[2]);
+      if (den !== 0 && num > 0) {
+        const normalized = `${(Math.round((num / den) * 100) / 100).toFixed(
+          2
+        )}:1`;
+        // Extract any parenthetical note that follows the ratio
+        const afterRatio = p.slice(p.indexOf(m[0]) + m[0].length).trim();
+        const noteMatch = afterRatio.match(/^\s*\(([^)]+)\)/);
+        const note = noteMatch ? noteMatch[1].trim() : null;
+
+        out.push({
+          ratio: normalized,
+          raw: m[0].replace(/\s*/g, ""),
+          note: note,
+        });
+      }
+      continue;
+    }
+
+    // Handle common labels that imply a ratio
+    const lowered = p.toLowerCase();
+    if (/academy/.test(lowered))
+      out.push({ ratio: "1.37:1", raw: "1.37:1", note: null });
+    else if (/4\s*:?\s*3|\bfull\s*screen\b/.test(lowered))
+      out.push({ ratio: "1.33:1", raw: "1.33:1", note: null });
+    else if (/16\s*:?\s*9|hdtv|1\.78/.test(lowered))
+      out.push({ ratio: "1.78:1", raw: "1.78:1", note: null });
+  }
+
+  return out;
+}
+
+function uniqueRatios(entries) {
+  const seen = new Set();
+  const uniq = [];
+  for (const e of entries) {
+    if (!e || !e.ratio) continue;
+    if (seen.has(e.ratio)) continue;
+    seen.add(e.ratio);
+    uniq.push(e);
+  }
+  return uniq;
+}
+
+function ratioToNumber(ratio) {
+  const m = String(ratio).match(/(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const num = parseFloat(m[1]);
+  const den = parseFloat(m[2]);
+  if (!isFinite(num) || !isFinite(den) || den === 0) return null;
+  return num / den;
+}
+
+function mapRatioToType(ratio) {
+  const val = ratioToNumber(ratio);
+  if (val == null) return { short: null, long: null };
+  const within = (t, d = 0.02) => Math.abs(val - t) <= d;
+
+  // Ultra-wide and specialty formats
+  if (within(4.0)) return { short: "Polyvision", long: "Polyvision" };
+  if (within(2.76))
+    return {
+      short: "Ultra Panavision 70",
+      long: "Ultra Panavision 70, MGM Camera 65",
+    };
+  if (within(2.59)) return { short: "Cinerama", long: "Cinerama" };
+
+  // Modern widescreen formats
+  if (within(2.4) || within(2.39) || within(2.35))
+    return { short: "Scope", long: "Anamorphic widescreen, Scope" };
+  if (within(2.2))
+    return { short: "Todd-AO", long: "Todd-AO, Super Panavision 70" };
+  if (within(2.11)) return { short: "IMAX 2.11:1", long: "IMAX 2.11:1" };
+  if (within(2.0)) return { short: "Univisium", long: "Univisium, 18:9" };
+  if (within(1.9)) return { short: "Digital IMAX", long: "Digital IMAX" };
+  if (within(1.85))
+    return {
+      short: "Widescreen",
+      long: "Widescreen (flat), Standard American Widescreen",
+    };
+
+  // TV and HDTV formats
+  if (within(1.78) || within(16 / 9))
+    return { short: "16:9", long: "16:9, HDTV, Widescreen TV" };
+  if (within(1.66))
+    return { short: "European Widescreen", long: "5:3, European Widescreen" };
+
+  // IMAX film formats
+  if (within(1.43) || within(1.44))
+    return { short: "IMAX 70mm", long: "IMAX (70mm), True IMAX" };
+
+  // Classic formats
+  if (within(1.37))
+    return { short: "Academy Ratio", long: "Academy Ratio, Academy Standard" };
+  if (within(1.33) || within(4 / 3))
+    return { short: "4:3", long: "4:3, Full screen, Standard ratio" };
+  if (within(1.19)) return { short: "Silent film", long: "Silent film" };
+
+  return { short: null, long: null };
+}
+
+function scoreForPrimary(ratio) {
+  const val = ratioToNumber(ratio);
+  if (val == null) return 0;
+  const within = (t, d = 0.02) => Math.abs(val - t) <= d;
+  // Ranking preference: Scope > 1.85 > 2.20 > 1.90 > 2.11 > 1.78 > 1.66 > 2.00 > 1.43 > specialty wide formats > others
+  if (within(2.4) || within(2.39) || within(2.35)) return 100;
+  if (within(1.85)) return 95;
+  if (within(2.2)) return 90;
+  if (within(1.9)) return 85;
+  if (within(2.11)) return 83;
+  if (within(1.78)) return 80;
+  if (within(1.66)) return 70;
+  if (within(2.0)) return 60;
+  if (within(1.43) || within(1.44)) return 50;
+  if (within(2.76)) return 45;
+  if (within(2.59)) return 43;
+  if (within(1.37)) return 40;
+  if (within(1.33)) return 35;
+  if (within(1.19)) return 30;
+  if (within(4.0)) return 25;
+  return 10; // default
+}
+
+function choosePrimaryRatio(ratios) {
+  if (!ratios || ratios.length === 0) return null;
+  let best = ratios[0];
+  let bestScore = scoreForPrimary(best);
+  for (let i = 1; i < ratios.length; i++) {
+    const r = ratios[i];
+    const s = scoreForPrimary(r);
+    if (s > bestScore) {
+      best = r;
+      bestScore = s;
+    }
+  }
+  return best;
+}
+
+function formatBadgeTextForIcon(ratio) {
+  // Show just the numeric part before ":1", up to 4 chars if possible
+  if (!ratio) return "";
+  const m = String(ratio).match(/^(\d+(?:\.\d+)?):1$/);
+  if (m) return m[1].slice(0, 4);
+  const n = ratioToNumber(ratio);
+  return n
+    ? String(Math.round(n * 100) / 100).slice(0, 4)
+    : String(ratio).slice(0, 4);
+}
+
+function parseAllAspectRatiosFromImdb(html) {
+  const blocks = findAspectRatioBlocks(html);
+  const entries = blocks.flatMap((b) => parseRatiosFromBlock(b));
+  const uniq = uniqueRatios(entries);
+  return uniq.map((e) => e.ratio);
 }
 
 async function fetchImdbAspectRatio(imdbId) {
@@ -141,46 +379,69 @@ async function fetchImdbAspectRatio(imdbId) {
   const timeSinceLastRequest = now - lastImdbRequestTime;
   if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
     const delay = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest;
-    console.log(`[LB-AR BG] Rate limiting: waiting ${delay}ms before IMDb request`);
+    console.log(
+      `[LB-AR BG] Rate limiting: waiting ${delay}ms before IMDb request`
+    );
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
-  
+
   const url = `https://www.imdb.com/title/${imdbId}/technical/`;
   console.log(`[LB-AR BG] Fetching from IMDb: ${url}`);
-  
+
   lastImdbRequestTime = Date.now();
   STATUS.imdbRequests++;
-  
-  const res = await fetch(url, { 
-    method: "GET", 
+
+  const res = await fetch(url, {
+    method: "GET",
     credentials: "omit",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    }
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
   });
-  
+
   if (!res.ok) {
     throw new Error(`IMDb fetch failed: ${res.status}`);
   }
-  
+
   const html = await res.text();
   console.log(`[LB-AR BG] Received ${html.length} bytes from IMDb`);
-  
+
   const list = parseAllAspectRatiosFromImdb(html);
   if (!list || list.length === 0) {
     throw new Error("Aspect ratio not found on IMDb");
   }
-  
+
   console.log(`[LB-AR BG] Parsed aspect ratios:`, list);
-  
-  // Prefer entries that look like a ratio (n.nn:1, n.nn:1 (desc), etc.)
-  // Otherwise just return the first.
-  const ratioLike = list.find((v) => /\d+(?:\.\d+)?\s*:\s*\d+/.test(v));
-  const aspectRatio = normalizeAspectRatioText(ratioLike || list[0]);
-  
-  console.log(`[LB-AR BG] Selected aspect ratio: ${aspectRatio}`);
-  
-  return { aspectRatio, source: "imdb", sourceUrl: url };
+
+  // Normalize and unique already handled; choose primary and compute display text
+  const primary = choosePrimaryRatio(list) || list[0];
+  const aspectRatio = normalizeAspectRatioText(primary);
+
+  // Build display text with friendly names for each ratio
+  const displayParts = list.map((r) => {
+    const typeMap = mapRatioToType(r);
+    if (typeMap.long) {
+      return `${r} (${typeMap.long})`;
+    }
+    return r;
+  });
+  const displayText = displayParts.join(" • ");
+
+  const typeMap = mapRatioToType(aspectRatio);
+
+  console.log(`[LB-AR BG] Selected primary aspect ratio: ${aspectRatio}`);
+  console.log(`[LB-AR BG] Display text with names: ${displayText}`);
+
+  return {
+    aspectRatio,
+    displayText,
+    allAspectRatios: list,
+    mappedTypeShort: typeMap.short,
+    mappedTypeLong: typeMap.long,
+    source: "imdb",
+    sourceUrl: url,
+  };
 }
 
 // Listen for tab activation to update badge
@@ -210,13 +471,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       try {
         const imdbId = msg.imdbId;
         const tabId = sender.tab?.id;
-        
+
         STATUS.totalFetches++;
         STATUS.lastImdbId = imdbId;
         STATUS.lastStatus = "fetching";
         STATUS.lastUpdate = new Date().toISOString();
         saveStatus();
-        
+
         const now = Date.now();
         const cached = await getCached(imdbId);
         if (
@@ -228,18 +489,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           STATUS.lastStatus = "success";
           STATUS.lastAspectRatio = cached.aspectRatio;
           saveStatus();
-          
+
           // Update tab data and badge
           if (tabId) {
             TAB_DATA.set(tabId, {
               imdbId,
               aspectRatio: cached.aspectRatio,
+              displayText: cached.displayText || cached.aspectRatio,
+              mappedTypeShort: cached.mappedTypeShort || null,
               filmTitle: msg.filmTitle || null,
             });
             saveTabData();
             updateBadgeForTab(tabId);
           }
-          
+
           sendResponse({ ok: true, data: cached });
           return;
         }
@@ -249,18 +512,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         STATUS.lastStatus = "success";
         STATUS.lastAspectRatio = record.aspectRatio;
         saveStatus();
-        
+
         // Update tab data and badge
         if (tabId) {
           TAB_DATA.set(tabId, {
             imdbId,
             aspectRatio: record.aspectRatio,
+            displayText: record.displayText || record.aspectRatio,
+            mappedTypeShort: record.mappedTypeShort || null,
             filmTitle: msg.filmTitle || null,
           });
           saveTabData();
           updateBadgeForTab(tabId);
         }
-        
+
         sendResponse({ ok: true, data: record });
       } catch (err) {
         STATUS.lastStatus = "error";
@@ -274,7 +539,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true; // async response
   }
-  
+
   if (msg && msg.type === "updateStatus") {
     // Content script updating status
     const tabId = sender.tab?.id;
@@ -284,12 +549,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.error) STATUS.lastError = msg.error;
     STATUS.lastUpdate = new Date().toISOString();
     saveStatus();
-    
+
     // Update tab-specific data
     if (tabId && msg.aspectRatio) {
       TAB_DATA.set(tabId, {
         imdbId: msg.imdbId || STATUS.lastImdbId,
         aspectRatio: msg.aspectRatio,
+        // content doesn't pass displayText; keep previous if any
+        displayText: TAB_DATA.get(tabId)?.displayText || msg.aspectRatio,
         filmTitle: msg.filmTitle || null,
       });
       saveTabData();
@@ -297,7 +564,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     return;
   }
-  
+
   if (msg && msg.type === "getStatus") {
     sendResponse(STATUS);
     return true;

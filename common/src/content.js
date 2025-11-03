@@ -298,12 +298,9 @@
     requestAspectRatio(id, filmTitle).then((resp) => {
       log("Got aspect ratio response:", resp);
       if (resp && resp.ok && resp.data) {
-        updateBadge(
-          badge,
-          resp.data.aspectRatio,
-          resp.data.source,
-          resp.data.sourceUrl
-        );
+        const display = resp.data.displayText || resp.data.aspectRatio;
+
+        updateBadge(badge, display, resp.data.source, resp.data.sourceUrl);
         chrome.runtime.sendMessage({
           type: "updateStatus",
           imdbId: id,
