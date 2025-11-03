@@ -22,6 +22,7 @@ let STATUS = {
   lastImdbId: null,
   lastStatus: "idle", // idle, fetching, success, error
   lastAspectRatio: null,
+  lastFilmTitle: null,
   lastError: null,
   lastUpdate: null,
   totalFetches: 0,
@@ -474,6 +475,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         STATUS.totalFetches++;
         STATUS.lastImdbId = imdbId;
+        STATUS.lastFilmTitle = msg.filmTitle || null;
         STATUS.lastStatus = "fetching";
         STATUS.lastUpdate = new Date().toISOString();
         saveStatus();
@@ -488,6 +490,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           STATUS.cacheHits++;
           STATUS.lastStatus = "success";
           STATUS.lastAspectRatio = cached.aspectRatio;
+          STATUS.lastFilmTitle = msg.filmTitle || null;
           saveStatus();
 
           // Update tab data and badge
@@ -511,6 +514,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await setCached(imdbId, record);
         STATUS.lastStatus = "success";
         STATUS.lastAspectRatio = record.aspectRatio;
+        STATUS.lastFilmTitle = msg.filmTitle || null;
         saveStatus();
 
         // Update tab data and badge
@@ -546,6 +550,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.imdbId) STATUS.lastImdbId = msg.imdbId;
     if (msg.status) STATUS.lastStatus = msg.status;
     if (msg.aspectRatio) STATUS.lastAspectRatio = msg.aspectRatio;
+    if (msg.filmTitle) STATUS.lastFilmTitle = msg.filmTitle;
     if (msg.error) STATUS.lastError = msg.error;
     STATUS.lastUpdate = new Date().toISOString();
     saveStatus();
