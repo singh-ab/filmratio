@@ -356,6 +356,15 @@
             initWithAnchor(a, path);
           } else {
             log("IMDb link not found after 15 retries");
+            // Update any existing badge to show no IMDb link available
+            const badge = STATE.runtimeBadgeEl || document.querySelector(".lb-ar-badge");
+            if (badge) {
+              updateBadge(badge, null, null, null);
+              badge.textContent = "No IMDb link";
+              badge.title = "No IMDb link found on this page";
+              badge.classList.add("lb-ar-na");
+            }
+            STATE.initializedForPath = path; // Mark as processed
           }
         }
       }, 400);
