@@ -95,8 +95,8 @@ function downloadPolyfill(destPath) {
 function createFirefoxManifest(destPath) {
   const manifest = {
     manifest_version: 3,
-    name: "Letterboxd Aspect Ratio",
-    version: "0.1.0",
+    name: "FilmRatio for Letterboxd",
+    version: "1.0.0",
     description:
       "Displays film aspect ratios on Letterboxd using IMDb Technical Specs.",
     icons: {
@@ -129,7 +129,7 @@ function createFirefoxManifest(destPath) {
       type: "module",
     },
     action: {
-      default_title: "Letterboxd Aspect Ratio",
+      default_title: "FilmRatio for Letterboxd",
       default_popup: "common/popup.html",
       default_icon: {
         16: "common/icons/ar_lookup.png",
@@ -150,8 +150,8 @@ function createFirefoxManifest(destPath) {
 function createChromeManifest(destPath) {
   const manifest = {
     manifest_version: 3,
-    name: "Letterboxd Aspect Ratio",
-    version: "0.1.0",
+    name: "FilmRatio for Letterboxd",
+    version: "1.0.0",
     description:
       "Displays film aspect ratios on Letterboxd using IMDb Technical Specs.",
     icons: {
@@ -289,7 +289,7 @@ async function main() {
   const target = process.argv[2] || "both";
   const shouldZip = process.argv.includes("--zip");
 
-  console.log("Letterboxd Aspect Ratio - Build Script");
+  console.log("FilmRatio for Letterboxd - Build Script");
   console.log("==========================================");
 
   // Check if common directory exists
