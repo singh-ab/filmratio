@@ -472,29 +472,39 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       try {
         const imdbId = msg.imdbId;
         const tabId = sender.tab?.id;
+        const isIncognito = !!sender.tab?.incognito; // true if request originated in a private window
 
+        // Update transient status (do NOT persist status for incognito)
         STATUS.totalFetches++;
         STATUS.lastImdbId = imdbId;
         STATUS.lastFilmTitle = msg.filmTitle || null;
         STATUS.lastStatus = "fetching";
         STATUS.lastUpdate = new Date().toISOString();
-        saveStatus();
+        if (!isIncognito) saveStatus(); // persist only for normal windows
 
         const now = Date.now();
-        const cached = await getCached(imdbId);
+
+        // If incognito: do not use persistent cache or storage
+        let cached = null;
+        if (!isIncognito) {
+          cached = await getCached(imdbId);
+        }
+
         if (
           cached &&
           cached.fetchedAt &&
           now - cached.fetchedAt < CACHE_TTL_MS
         ) {
-          STATUS.cacheHits++;
-          STATUS.lastStatus = "success";
-          STATUS.lastAspectRatio = cached.aspectRatio;
-          STATUS.lastFilmTitle = msg.filmTitle || null;
-          saveStatus();
+          if (!isIncognito) {
+            STATUS.cacheHits++;
+            STATUS.lastStatus = "success";
+            STATUS.lastAspectRatio = cached.aspectRatio;
+            STATUS.lastFilmTitle = msg.filmTitle || null;
+            saveStatus();
+          }
 
-          // Update tab data and badge
-          if (tabId) {
+          // For normal tabs, persist tab data; for incognito, keep in-memory only
+          if (tabId && !isIncognito) {
             TAB_DATA.set(tabId, {
               imdbId,
               aspectRatio: cached.aspectRatio,
@@ -504,37 +514,67 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             });
             saveTabData();
             updateBadgeForTab(tabId);
+          } else if (tabId && isIncognito) {
+            // incognito: update badge in memory only
+            TAB_DATA.set(tabId, {
+              imdbId,
+              aspectRatio: cached.aspectRatio,
+              displayText: cached.displayText || cached.aspectRatio,
+              mappedTypeShort: cached.mappedTypeShort || null,
+              filmTitle: msg.filmTitle || null,
+            });
+            updateBadgeForTab(tabId);
           }
 
           sendResponse({ ok: true, data: cached });
           return;
         }
+
+        // Make network request and DO NOT cache to persistent storage if incognito
         const data = await fetchImdbAspectRatio(imdbId);
         const record = { ...data, fetchedAt: Date.now() };
-        await setCached(imdbId, record);
-        STATUS.lastStatus = "success";
-        STATUS.lastAspectRatio = record.aspectRatio;
-        STATUS.lastFilmTitle = msg.filmTitle || null;
-        saveStatus();
 
-        // Update tab data and badge
-        if (tabId) {
-          TAB_DATA.set(tabId, {
-            imdbId,
-            aspectRatio: record.aspectRatio,
-            displayText: record.displayText || record.aspectRatio,
-            mappedTypeShort: record.mappedTypeShort || null,
-            filmTitle: msg.filmTitle || null,
-          });
-          saveTabData();
-          updateBadgeForTab(tabId);
+        if (!isIncognito) {
+          await setCached(imdbId, record);
+          STATUS.lastStatus = "success";
+          STATUS.lastAspectRatio = record.aspectRatio;
+          STATUS.lastFilmTitle = msg.filmTitle || null;
+          saveStatus();
+
+          if (tabId) {
+            TAB_DATA.set(tabId, {
+              imdbId,
+              aspectRatio: record.aspectRatio,
+              displayText: record.displayText || record.aspectRatio,
+              mappedTypeShort: record.mappedTypeShort || null,
+              filmTitle: msg.filmTitle || null,
+            });
+            saveTabData();
+            updateBadgeForTab(tabId);
+          }
+        } else {
+          // incognito: do not persist. Update only in-memory badge for tab
+          STATUS.lastStatus = "success";
+          STATUS.lastAspectRatio = record.aspectRatio;
+          STATUS.lastFilmTitle = msg.filmTitle || null;
+          // do NOT call saveStatus(), setCached(), or saveTabData()
+          if (tabId) {
+            TAB_DATA.set(tabId, {
+              imdbId,
+              aspectRatio: record.aspectRatio,
+              displayText: record.displayText || record.aspectRatio,
+              mappedTypeShort: record.mappedTypeShort || null,
+              filmTitle: msg.filmTitle || null,
+            });
+            updateBadgeForTab(tabId);
+          }
         }
 
         sendResponse({ ok: true, data: record });
       } catch (err) {
         STATUS.lastStatus = "error";
         STATUS.lastError = String(err && err.message ? err.message : err);
-        saveStatus();
+        if (!sender.tab?.incognito) saveStatus(); // persist error only for normal sessions
         sendResponse({
           ok: false,
           error: STATUS.lastError,
