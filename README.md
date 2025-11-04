@@ -84,17 +84,6 @@ filmratio/
 
 ## Technical Details
 
-### IMDb Data Usage
-
-This extension fetches publicly available data from IMDb technical specification pages:
-
-- Uses 30-day caching to minimize requests
-- Only fetches when user visits a film page
-- No bulk scraping or automated crawling
-- Gracefully handles parsing failures
-
-For commercial use or publication to extension stores, consider using the official IMDb API or alternative services like TMDB/OMDb with free tiers.
-
 ### Privacy
 
 - No tracking, analytics, or user data collection
