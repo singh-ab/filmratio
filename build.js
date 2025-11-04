@@ -20,7 +20,7 @@ const POLYFILL_URL =
  */
 function copyRecursive(src, dest) {
   if (!fs.existsSync(src)) {
-    console.error(`❌ Source not found: ${src}`);
+    console.error(`Source not found: ${src}`);
     return;
   }
 
@@ -73,7 +73,7 @@ function downloadPolyfill(destPath) {
           response.pipe(file);
           file.on("finish", () => {
             file.close();
-            console.log("   ✓ Polyfill downloaded");
+            console.log("   Polyfill downloaded");
             resolve();
           });
         } else {
@@ -100,10 +100,10 @@ function createFirefoxManifest(destPath) {
     description:
       "Displays film aspect ratios on Letterboxd using IMDb Technical Specs.",
     icons: {
-      "16": "ar_lookup.png",
-      "32": "ar_lookup.png", 
-      "48": "ar_lookup.png",
-      "128": "ar_lookup.png"
+      16: "common/icons/ar_lookup.png",
+      32: "common/icons/ar_lookup.png",
+      48: "common/icons/ar_lookup.png",
+      128: "common/icons/ar_lookup.png",
     },
     browser_specific_settings: {
       gecko: {
@@ -132,16 +132,16 @@ function createFirefoxManifest(destPath) {
       default_title: "Letterboxd Aspect Ratio",
       default_popup: "common/popup.html",
       default_icon: {
-        "16": "ar_lookup.png",
-        "32": "ar_lookup.png",
-        "48": "ar_lookup.png", 
-        "128": "ar_lookup.png"
-      }
+        16: "common/icons/ar_lookup.png",
+        32: "common/icons/ar_lookup.png",
+        48: "common/icons/ar_lookup.png",
+        128: "common/icons/ar_lookup.png",
+      },
     },
   };
 
   fs.writeFileSync(destPath, JSON.stringify(manifest, null, 2));
-  console.log("   ✓ Firefox manifest created");
+  console.log("   Firefox manifest created");
 }
 
 /**
@@ -155,10 +155,10 @@ function createChromeManifest(destPath) {
     description:
       "Displays film aspect ratios on Letterboxd using IMDb Technical Specs.",
     icons: {
-      "16": "ar_lookup.png",
-      "32": "ar_lookup.png", 
-      "48": "ar_lookup.png",
-      "128": "ar_lookup.png"
+      16: "common/icons/ar_lookup.png",
+      32: "common/icons/ar_lookup.png",
+      48: "common/icons/ar_lookup.png",
+      128: "common/icons/ar_lookup.png",
     },
     permissions: ["storage"],
     host_permissions: ["https://www.imdb.com/*"],
@@ -177,23 +177,23 @@ function createChromeManifest(destPath) {
       default_title: "Letterboxd Aspect Ratio",
       default_popup: "common/popup.html",
       default_icon: {
-        "16": "ar_lookup.png",
-        "32": "ar_lookup.png",
-        "48": "ar_lookup.png", 
-        "128": "ar_lookup.png"
-      }
+        16: "common/icons/ar_lookup.png",
+        32: "common/icons/ar_lookup.png",
+        48: "common/icons/ar_lookup.png",
+        128: "common/icons/ar_lookup.png",
+      },
     },
   };
 
   fs.writeFileSync(destPath, JSON.stringify(manifest, null, 2));
-  console.log("   ✓ Chrome manifest created");
+  console.log("   Chrome manifest created");
 }
 
 /**
  * Build Chrome extension
  */
 async function buildChrome() {
-  console.log("\n📦 Building Chrome extension...");
+  console.log("\nBuilding Chrome extension...");
 
   const distDir = "dist/chrome";
 
@@ -208,16 +208,10 @@ async function buildChrome() {
   console.log("   Copying common files...");
   copyRecursive("common", path.join(distDir, "common"));
 
-  // Copy icon file
-  if (fs.existsSync("ar_lookup.png")) {
-    fs.copyFileSync("ar_lookup.png", path.join(distDir, "ar_lookup.png"));
-    console.log("   ✓ Icon copied");
-  }
-
   // Create Chrome manifest
   createChromeManifest(path.join(distDir, "manifest.json"));
 
-  console.log("✅ Chrome extension built in dist/chrome/");
+  console.log("Chrome extension built in dist/chrome/");
   console.log(
     '   Load: chrome://extensions → Load unpacked → Select "dist/chrome"'
   );
@@ -234,7 +228,7 @@ function createZip(sourceDir, outputFile) {
 
     // For Firefox compatibility, we need to use the 'zip' command or similar
     // Node.js doesn't have built-in zip creation, so we'll provide instructions
-    console.log(`\n📦 To create zip file compatible with Firefox:`);
+    console.log(`\nTo create zip file compatible with Firefox:`);
     console.log(`   cd ${sourceDir}`);
     console.log(
       `   PowerShell: Compress-Archive -Path * -DestinationPath "../${path.basename(
@@ -250,7 +244,7 @@ function createZip(sourceDir, outputFile) {
  * Build Firefox extension
  */
 async function buildFirefox() {
-  console.log("\n📦 Building Firefox extension...");
+  console.log("\nBuilding Firefox extension...");
 
   const distDir = "dist/firefox";
 
@@ -271,7 +265,7 @@ async function buildFirefox() {
   try {
     await downloadPolyfill(polyfillPath);
   } catch (err) {
-    console.error("❌ Failed to download polyfill:", err.message);
+    console.error("Failed to download polyfill:", err.message);
     return;
   }
 
@@ -279,16 +273,10 @@ async function buildFirefox() {
   console.log("   Copying common files...");
   copyRecursive("common", path.join(distDir, "common"));
 
-  // Copy icon file
-  if (fs.existsSync("ar_lookup.png")) {
-    fs.copyFileSync("ar_lookup.png", path.join(distDir, "ar_lookup.png"));
-    console.log("   ✓ Icon copied");
-  }
-
   // Create Firefox manifest
   createFirefoxManifest(path.join(distDir, "manifest.json"));
 
-  console.log("✅ Firefox extension built in dist/firefox/");
+  console.log("Firefox extension built in dist/firefox/");
   console.log(
     '   Load: about:debugging → Load Temporary Add-on → Select "dist/firefox/manifest.json"'
   );
@@ -301,12 +289,12 @@ async function main() {
   const target = process.argv[2] || "both";
   const shouldZip = process.argv.includes("--zip");
 
-  console.log("🔧 Letterboxd Aspect Ratio - Build Script");
+  console.log("Letterboxd Aspect Ratio - Build Script");
   console.log("==========================================");
 
   // Check if common directory exists
   if (!fs.existsSync("common")) {
-    console.error('\n❌ Error: "common" directory not found');
+    console.error('\nError: "common" directory not found');
     console.error(
       '   Please ensure common files are in the "common/" directory'
     );
@@ -323,15 +311,15 @@ async function main() {
     }
 
     if (target !== "chrome" && target !== "firefox" && target !== "both") {
-      console.error(`\n❌ Invalid target: ${target}`);
+      console.error(`\nInvalid target: ${target}`);
       console.error("   Usage: node build.js [chrome|firefox|both] [--zip]");
       process.exit(1);
     }
 
-    console.log("\n✨ Build complete!");
+    console.log("\nBuild complete!");
 
     if (shouldZip) {
-      console.log("\n📦 Creating zip archives...");
+      console.log("\nCreating zip archives...");
       console.log("   Use PowerShell to zip:");
       console.log(
         '   cd dist/firefox; Compress-Archive -Path * -DestinationPath "../letterboxd-aspect-ratio-firefox.zip" -Force'
@@ -341,7 +329,7 @@ async function main() {
       );
     }
   } catch (err) {
-    console.error("\n❌ Build failed:", err.message);
+    console.error("\nBuild failed:", err.message);
     process.exit(1);
   }
 }
