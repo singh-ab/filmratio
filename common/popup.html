@@ -1,32 +1,50 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
-  <!-- Added data-theme="dark" for automatic dark mode -->
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AR Lookup Status</title>
-    <!-- Link Pico first -->
+    <title>FilmRatio Status</title>
     <link rel="stylesheet" href="styles/pico.min.css" />
-    <!-- You can add a custom stylesheet after for overrides -->
     <style>
-      /* Make the popup a bit wider and remove margins */
       main {
-        width: 320px;
+        width: 340px;
         padding: 1rem;
         margin: 0;
       }
       small {
         color: var(--pico-color-muted);
       }
+      .header-flex {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .header-icon {
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+      }
+      .header-text h4 {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+      .header-text p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--pico-color-muted);
+      }
     </style>
   </head>
   <body>
     <main>
-      <!-- Use <main> as the primary container -->
-      <hgroup>
-        <h4>AR Lookup Status</h4>
-        <p>Real-time aspect ratio data.</p>
-      </hgroup>
+      <div class="header-flex">
+        <img src="icons/ar_lookup.png" alt="FilmRatio" class="header-icon" />
+        <div class="header-text">
+          <h4>FilmRatio</h4>
+          <p>Aspect ratio lookup for Letterboxd</p>
+        </div>
+      </div>
 
       <!-- Use an <article> for a styled card effect -->
       <article>
