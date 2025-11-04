@@ -99,6 +99,12 @@ function createFirefoxManifest(destPath) {
     version: "0.1.0",
     description:
       "Displays film aspect ratios on Letterboxd using IMDb Technical Specs.",
+    icons: {
+      "16": "ar_lookup.png",
+      "32": "ar_lookup.png", 
+      "48": "ar_lookup.png",
+      "128": "ar_lookup.png"
+    },
     browser_specific_settings: {
       gecko: {
         id: "letterboxd-aspect-ratio@example.com",
@@ -125,6 +131,12 @@ function createFirefoxManifest(destPath) {
     action: {
       default_title: "Letterboxd Aspect Ratio",
       default_popup: "common/popup.html",
+      default_icon: {
+        "16": "ar_lookup.png",
+        "32": "ar_lookup.png",
+        "48": "ar_lookup.png", 
+        "128": "ar_lookup.png"
+      }
     },
   };
 
@@ -142,6 +154,12 @@ function createChromeManifest(destPath) {
     version: "0.1.0",
     description:
       "Displays film aspect ratios on Letterboxd using IMDb Technical Specs.",
+    icons: {
+      "16": "ar_lookup.png",
+      "32": "ar_lookup.png", 
+      "48": "ar_lookup.png",
+      "128": "ar_lookup.png"
+    },
     permissions: ["storage"],
     host_permissions: ["https://www.imdb.com/*"],
     content_scripts: [
@@ -158,6 +176,12 @@ function createChromeManifest(destPath) {
     action: {
       default_title: "Letterboxd Aspect Ratio",
       default_popup: "common/popup.html",
+      default_icon: {
+        "16": "ar_lookup.png",
+        "32": "ar_lookup.png",
+        "48": "ar_lookup.png", 
+        "128": "ar_lookup.png"
+      }
     },
   };
 
@@ -183,6 +207,12 @@ async function buildChrome() {
   // Copy common files
   console.log("   Copying common files...");
   copyRecursive("common", path.join(distDir, "common"));
+
+  // Copy icon file
+  if (fs.existsSync("ar_lookup.png")) {
+    fs.copyFileSync("ar_lookup.png", path.join(distDir, "ar_lookup.png"));
+    console.log("   ✓ Icon copied");
+  }
 
   // Create Chrome manifest
   createChromeManifest(path.join(distDir, "manifest.json"));
@@ -248,6 +278,12 @@ async function buildFirefox() {
   // Copy common files
   console.log("   Copying common files...");
   copyRecursive("common", path.join(distDir, "common"));
+
+  // Copy icon file
+  if (fs.existsSync("ar_lookup.png")) {
+    fs.copyFileSync("ar_lookup.png", path.join(distDir, "ar_lookup.png"));
+    console.log("   ✓ Icon copied");
+  }
 
   // Create Firefox manifest
   createFirefoxManifest(path.join(distDir, "manifest.json"));
