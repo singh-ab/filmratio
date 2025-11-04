@@ -587,15 +587,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "updateStatus") {
     // Content script updating status
     const tabId = sender.tab?.id;
+    const isIncognito = !!sender.tab?.incognito;
+    
     if (msg.imdbId) STATUS.lastImdbId = msg.imdbId;
     if (msg.status) STATUS.lastStatus = msg.status;
     if (msg.aspectRatio) STATUS.lastAspectRatio = msg.aspectRatio;
     if (msg.filmTitle) STATUS.lastFilmTitle = msg.filmTitle;
     if (msg.error) STATUS.lastError = msg.error;
     STATUS.lastUpdate = new Date().toISOString();
-    saveStatus();
+    
+    // Only persist status if not incognito
+    if (!isIncognito) saveStatus();
 
-    // Update tab-specific data
+    // Update tab-specific data (persist only if not incognito)
     if (tabId && msg.aspectRatio) {
       TAB_DATA.set(tabId, {
         imdbId: msg.imdbId || STATUS.lastImdbId,
@@ -604,7 +608,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         displayText: TAB_DATA.get(tabId)?.displayText || msg.aspectRatio,
         filmTitle: msg.filmTitle || null,
       });
-      saveTabData();
+      if (!isIncognito) saveTabData();
       updateBadgeForTab(tabId);
     }
     return;
